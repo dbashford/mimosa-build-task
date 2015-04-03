@@ -28,8 +28,7 @@ exports.validate = function ( config, validators ) {
     }
 
     var startedWhen = config.buildTask.startedWhen;
-    if (!startedWhen) {
-      errors.push( "buildTask.startedWhen is required" );
+    if ( startedWhen !== null && startedWhen !== undefined ) {
       var type = typeof startedWhen;
       if ( ["string", "number", "boolean"].indexOf( type ) === -1 ) {
         errors.push( "buildTask.startedWhen should be a string, number or boolean." );
@@ -39,6 +38,8 @@ exports.validate = function ( config, validators ) {
           config.buildTask.finishes = true;
         }
       }
+    } else {
+      errors.push( "buildTask.startedWhen is required" );
     }
   }
 
