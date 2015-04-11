@@ -1,6 +1,6 @@
 {
   "name": "mimosa-build-task",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "homepage": "https://github.com/dbashford/mimosa-build-task",
   "author": "David Bashford",
   "description": "Mimosa module for starting/stopping a task during a build.",

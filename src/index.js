@@ -4,7 +4,18 @@ var fs = require( "fs" )
   , psTree = require( "ps-tree" )
   , moduleConfig = require( "./config" )
   , pid = null
+  , allPIDs = null
+  , cleaningUp = false
   ;
+
+var _determinePIDs = function( next ) {
+  psTree( pid, function ( err, children ) {
+    allPIDs = [pid].concat( children.map( function ( p ) {
+      return p.PID;
+    }));
+    next();
+  });
+};
 
 var _startProcess = function( mimosaConfig ) {
   var exec = require("child_process").exec
@@ -37,8 +48,10 @@ var _monitorProcess = function( mimosaConfig, next, child ) {
     // and the startedWhen text has been found
     if (!nextCalled && str.indexOf( mimosaConfig.buildTask.startedWhen ) > -1 ) {
       nextCalled = true;
-      mimosaConfig.log.info("Build task started.");
-      next();
+      _determinePIDs( function() {
+        mimosaConfig.log.info("Build task started.");
+        next();
+      });
     }
   };
 
@@ -94,39 +107,51 @@ var _startTask = function ( mimosaConfig, options, next ) {
     } else {
       // is number for timeout
       setTimeout( function() {
-        mimosaConfig.log.info("Build task timeout parameter hit, continuing build.");
-        next();
+        _determinePIDs( function() {
+          mimosaConfig.log.info("Build task timeout parameter hit, continuing build.");
+          next();
+        });
       }, mimosaConfig.buildTask.startedWhen );
     }
   }
 };
 
-var _stopTask = function ( mimosaConfig, options, next ) {
-
+var _cleanUpTask = function( mimosaConfig, next ) {
   // no task was started
-  if ( !pid ) {
-    return next();
+  if ( !allPIDs || cleaningUp ) {
+    if ( next ) {
+      next();
+    }
+    return;
   }
 
-  mimosaConfig.log.info("Stopping build task...");
-  psTree( pid, function ( err, children ) {
-    [pid].concat( children.map( function ( p ) {
-      return p.PID;
-    })).forEach( function ( tpid ) {
-      try {
-        process.kill( tpid );
-      } catch (ex) { }
-    });
-    mimosaConfig.log.info("Build task stopped.");
-    next();
+  cleaningUp = true;
+
+  mimosaConfig.log.info( "Stopping build task..." );
+
+  allPIDs.forEach( function(_pid) {
+    process.kill(_pid);
   });
+
+  if ( next ) {
+    next();
+  }
 };
 
-var registration = function (config, register) {
-  if ( config.isBuild ) {
+var _stopTask = function ( mimosaConfig, options, next ) {
+  _cleanUpTask( mimosaConfig, next );
+};
+
+var registration = function (mimosaConfig, register) {
+  if ( mimosaConfig.isBuild ) {
     register( ["postBuild"], "afterPackage", _startTask );
 
-    if ( !config.buildTask.finishes ) {
+    if ( !mimosaConfig.buildTask.finishes ) {
+
+      process.on( "exit", function() {
+        _cleanUpTask( mimosaConfig );
+      });
+
       // register stop task because task doesn't stop on its own
       register( ["postBuild"], "complete", _stopTask );
     }
